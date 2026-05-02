@@ -1,0 +1,18 @@
+R_DEF: Internal format may change without notice
+local
+color white
+drawable widget_background
+id widget_empty
+id widget_item_check
+id widget_item_name
+id widget_item_qty
+id widget_list
+id widget_refresh
+id widget_title
+layout widget_item
+layout widget_shopping
+mipmap ic_launcher
+mipmap ic_launcher_foreground
+mipmap ic_launcher_round
+style Theme.UCShoppingList
+xml widget_info

@@ -1,0 +1,50 @@
+[
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-debug-4:\\layout_widget_item.xml.flat",
+        "source": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-main-6:\\layout\\widget_item.xml"
+    },
+    {
+        "merged": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-debug-4:\\xml_widget_info.xml.flat",
+        "source": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-main-6:\\xml\\widget_info.xml"
+    },
+    {
+        "merged": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-debug-4:\\layout_widget_shopping.xml.flat",
+        "source": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-main-6:\\layout\\widget_shopping.xml"
+    },
+    {
+        "merged": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-debug-4:\\drawable_widget_background.xml.flat",
+        "source": "C:\\Users\\geggi\\.gradle\\daemon\\9.0.0\\com.ucshoppinglist.app-main-6:\\drawable\\widget_background.xml"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-anydpi-v26_ic_launcher_foreground.xml.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-anydpi-v26/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "com.ucshoppinglist.app-debug-4:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "com.ucshoppinglist.app-main-6:/mipmap-mdpi/ic_launcher.png"
+    }
+]
