@@ -20,7 +20,7 @@ const UI_FILE = path.join(__dirname, "..", "public", "index.html");
 /** @type {Settings} */
 let settings = loadSettings();
 
-const PORT = Number(process.env.PORT || settings.port || 9085);
+const PORT = 9085;
 
 const server = createServer(handleHttp);
 const wss = new WebSocketServer({ server, path: "/ws" });
