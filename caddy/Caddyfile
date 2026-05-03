@@ -1,0 +1,15 @@
+{
+    auto_https disable_redirects
+}
+
+# HTTP bleibt bewusst aktiv (kein Redirect-Zwang auf HTTPS).
+:80 {
+    reverse_proxy shoppinglist-server:8080
+}
+
+# HTTPS ist zusaetzlich verfuegbar.
+# Fuer lokale/self-hosted Nutzung wird ein internes Zertifikat verwendet.
+:443 {
+    tls internal
+    reverse_proxy shoppinglist-server:8080
+}

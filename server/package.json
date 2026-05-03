@@ -1,0 +1,14 @@
+{
+  "name": "uc-shoppinglist-server",
+  "version": "0.5.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node --max-old-space-size=96 src/index.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.3"
+  }
+}

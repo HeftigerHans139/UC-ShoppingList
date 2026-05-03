@@ -1,0 +1,35 @@
+services:
+  shoppinglist-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: uc-shoppinglist-server
+    volumes:
+      - ./server/data:/app/data
+    expose:
+      - "8080"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.50
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: uc-shoppinglist-proxy
+    depends_on:
+      - shoppinglist-server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    mem_limit: 64m
+    cpus: 0.25
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <link rel="icon" type="image/png" href="logo.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UC ShoppingList – Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1c1f2e;
+      --surface2:  #252838;
+      --border:    #2e3147;
+      --accent:    #4f8ef7;
+      --accent2:   #1f7a8c;
+      --danger:    #e05c5c;
+      --success:   #4caf7d;
+      --warning:   #e0a830;
+      --text:      #e8eaf0;
+      --muted:     #7a7f9a;
+      --radius:    10px;
+    }
+
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Layout ──────────────────────────────────── */
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 18px; font-weight: 700; color: var(--accent); flex: 1; letter-spacing: -.3px; }
+    header .pill { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    header .pill.online { color: var(--success); border-color: var(--success); }
+    nav { background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 0; padding: 0 24px; }
+    nav button { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; font-size: 14px; padding: 12px 16px; transition: .15s; }
+    nav button:hover { color: var(--text); }
+    nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    main { flex: 1; padding: 28px 24px; max-width: 900px; width: 100%; margin: 0 auto; }
+
+    /* ── Cards / Typo ────────────────────────────── */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px; }
+    h2 { font-size: 20px; font-weight: 700; margin-bottom: 18px; }
+    h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+
+    /* ── Inputs / Buttons ────────────────────────── */
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+    input, select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); font-size: 14px; padding: 9px 12px; outline: none; transition: border .15s; }
+    input:focus, select:focus { border-color: var(--accent); }
+    .field { margin-bottom: 14px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .row.end { justify-content: flex-end; }
+
+    button.btn { border: none; border-radius: 7px; cursor: pointer; font-size: 14px; font-weight: 600; padding: 9px 18px; transition: opacity .15s, filter .15s; }
+    button.btn:hover { filter: brightness(1.12); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-ghost   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    /* ── Badge / Toggle ──────────────────────────── */
+    .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+    .badge-green  { background: #1a3d2b; color: var(--success); }
+    .badge-yellow { background: #3d2e0e; color: var(--warning); }
+    .badge-red    { background: #3d1a1a; color: var(--danger); }
+
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .toggle-row:last-child { border-bottom: none; }
+    .toggle-row .desc { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { display: none; }
+    .slider { position: absolute; inset: 0; background: var(--border); border-radius: 24px; cursor: pointer; transition: .2s; }
+    .slider::before { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: .2s; }
+    input:checked + .slider { background: var(--accent); }
+    input:checked + .slider::before { transform: translateX(20px); }
+
+    /* ── Table ───────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; padding: 0 8px 8px; letter-spacing: .5px; }
+    tbody tr { border-top: 1px solid var(--border); }
+    tbody tr:hover { background: var(--surface2); }
+    td { padding: 10px 8px; vertical-align: middle; }
+    td .item-name { font-weight: 600; }
+    td .item-qty  { font-size: 12px; color: var(--muted); }
+    td.done .item-name { text-decoration: line-through; color: var(--muted); }
+
+    /* ── List overview cards ─────────────────────── */
+    .list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .list-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: border-color .15s; }
+    .list-card:hover { border-color: var(--accent); }
+    .list-card .lc-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+    .list-card .lc-meta  { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+
+    /* ── Detail panel ────────────────────────────── */
+    .back-btn { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 14px; margin-bottom: 16px; display: inline-flex; align-items: center; gap: 4px; }
+    .detail-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+    .invite-code { font-size: 22px; letter-spacing: 4px; font-weight: 700; color: var(--accent); background: var(--surface2); padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border); }
+
+    /* ── Login ───────────────────────────────────── */
+    #login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg); }
+    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 36px 32px; width: 340px; }
+    .login-box h2 { margin-bottom: 22px; text-align: center; }
+
+    /* ── Toast ───────────────────────────────────── */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 18px; font-size: 14px; max-width: 320px; opacity: 0; transform: translateY(10px); transition: .25s; pointer-events: none; z-index: 999; }
+    #toast.show { opacity: 1; transform: none; }
+    #toast.err { border-color: var(--danger); color: var(--danger); }
+    #toast.ok  { border-color: var(--success); color: var(--success); }
+
+    /* ── Misc ────────────────────────────────────── */
+    .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 14px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; box-shadow: 0 0 0 2px #1a3d2b; }
+    .dot.off { background: var(--muted); box-shadow: none; }
+    code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--accent); }
+
+    @media (max-width: 600px) {
+      main { padding: 18px 14px; }
+      .list-grid { grid-template-columns: 1fr; }
+      nav button { padding: 10px 10px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="login-screen" style="display:none">
+  <div class="login-box">
+    <h2>🔒 Anmeldung</h2>
+    <div class="field">
+      <label>Passwort</label>
+      <input type="password" id="pw-input" placeholder="Passwort eingeben" />
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Anmelden</button>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <img src="logo.png" alt="Logo" style="height:32px;width:32px;margin-right:12px;border-radius:8px;box-shadow:0 1px 4px #0003;" />
+    <h1>UC ShoppingList</h1>
+    <span class="pill online" id="status-pill">● Online</span>
+  </header>
+  <nav>
+    <button class="active" onclick="showTab('lists', this)">Listen</button>
+    <button onclick="showTab('access', this)">Zugriff</button>
+    <button onclick="showTab('settings', this)">Einstellungen</button>
+  </nav>
+  <main id="main-content"></main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+let token = sessionStorage.getItem('ucsl_token') || '';
+let currentTab = 'lists';
+let accessRefreshTimer = null;
+let lastQrHtml = '';
+
+// ── Startup ──────────────────────────────────────────────────────────────────
+async function boot() {
+  const r = await apiFetch('/api/auth/status').catch(() => null);
+  if (!r) { showToast('Server nicht erreichbar', 'err'); return; }
+
+  if (r.authEnabled) {
+    if (!token) { showLogin(); return; }
+    // validate stored token
+    const check = await apiFetch('/api/admin/settings').catch(() => null);
+    if (!check) { token = ''; showLogin(); return; }
+  } else {
+    token = '';
+    const login = await apiFetch('/api/auth/login', 'POST', {});
+    token = login.token;
+  }
+  showApp();
+  renderLists();
+}
+
+function showLogin() {
+  document.getElementById('login-screen').style.display = '';
+  document.getElementById('app').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  if (!accessRefreshTimer) {
+    accessRefreshTimer = setInterval(() => {
+      if (currentTab === 'access') {
+        renderAccess();
+      }
+    }, 5000);
+  }
+}
+
+async function doLogin() {
+  const pw = document.getElementById('pw-input').value;
+  const r = await apiFetch('/api/auth/login', 'POST', { password: pw }).catch(e => ({ error: e.message }));
+  if (r?.token) {
+    token = r.token;
+    sessionStorage.setItem('ucsl_token', token);
+    showApp();
+    renderLists();
+  } else {
+    showToast(r?.error || 'Anmeldung fehlgeschlagen', 'err');
+  }
+}
+
+// ── Tab navigation ───────────────────────────────────────────────────────────
+function showTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'lists') renderLists();
+  if (tab === 'access') renderAccess();
+  if (tab === 'settings') renderSettings();
+}
+
+// ── Lists overview ───────────────────────────────────────────────────────────
+async function renderLists() {
+  const el = document.getElementById('main-content');
+  const lists = await apiFetch('/api/admin/lists').catch(() => []);
+
+  el.innerHTML = `
+    <div class="row" style="margin-bottom:18px">
+      <h2 style="margin:0;flex:1">Einkaufslisten</h2>
+      <button class="btn btn-primary btn-sm" onclick="openCreateList()">+ Neue Liste</button>
+    </div>
+    <div id="list-modal"></div>
+    ${lists.length === 0
+      ? '<p class="empty">Noch keine Listen vorhanden.</p>'
+      : `<div class="list-grid">${lists.map(listCard).join('')}</div>`
+    }
+  `;
+}
+
+function listCard(l) {
+  const shared = l.shared;
+  return `
+    <div class="list-card" onclick="renderListDetail('${l.id}')">
+      <div class="lc-title">${esc(l.title)}</div>
+      <div class="lc-meta">
+        <span class="badge ${shared ? 'badge-green' : 'badge-yellow'}">${shared ? 'Geteilt' : 'Privat'}</span>
+        <span>${l.itemCount} Artikel</span>
+        <span><span class="dot ${l.connectedClients ? '' : 'off'}"></span> ${l.connectedClients} verbunden</span>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">Code: <code>${l.inviteCode}</code></div>
+    </div>
+  `;
+}
+
+function openCreateList() {
+  document.getElementById('list-modal').innerHTML = `
+    <div class="card" style="border-color:var(--accent)">
+      <div class="card-title">Neue Liste erstellen</div>
+      <div class="field"><label>Titel</label><input id="nl-title" value="Einkaufsliste" /></div>
+      <div class="toggle-row">
+        <div><div style="font-weight:600">Geteilt</div><div class="desc">Andere koennen per Code beitreten</div></div>
+        <label class="switch"><input type="checkbox" id="nl-shared" checked /><span class="slider"></span></label>
+      </div>
+      <div class="row end" style="margin-top:14px">
+        <button class="btn btn-ghost btn-sm" onclick="renderLists()">Abbrechen</button>
+        <button class="btn btn-primary btn-sm" onclick="doCreateList()">Erstellen</button>
+      </div>
+    </div>
+  `;
+}
+
+async function doCreateList() {
+  const title = document.getElementById('nl-title').value.trim() || 'Einkaufsliste';
+  const shared = document.getElementById('nl-shared').checked;
+  await apiFetch('/api/lists/create', 'POST', { title, shared });
+  showToast('Liste erstellt', 'ok');
+  renderLists();
+}
+
+// ── List detail ───────────────────────────────────────────────────────────────
+async function renderListDetail(listId) {
+  const el = document.getElementById('main-content');
+  const [list, adminLists] = await Promise.all([
+    apiFetch(`/api/lists/${listId}`),
+    apiFetch('/api/admin/lists').catch(() => [])
+  ]);
+  const meta = adminLists.find(l => l.id === listId) || {};
+
+  el.innerHTML = `
+    <button class="back-btn" onclick="renderLists()">← Zurück</button>
+    <div class="row detail-meta">
+      <h2 style="margin:0;flex:1">${esc(list.title)}</h2>
+      <span class="badge ${list.shared ? 'badge-green' : 'badge-yellow'}">${list.shared ? 'Geteilt' : 'Privat'}</span>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Einladungscode</div>
+      <div class="row">
+        <span class="invite-code">${list.inviteCode}</span>
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('${list.inviteCode}')">Kopieren</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyLink('${list.id}','${list.inviteCode}')">Link kopieren</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Einstellungen</div>
+      <div class="toggle-row">
+        <div><div style="font-weight:600">Geteilt</div><div class="desc">Andere koennen per Code beitreten</div></div>
+        <label class="switch">
+          <input type="checkbox" id="dl-shared" ${list.shared ? 'checked' : ''} onchange="patchList('${listId}',{shared:this.checked})" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Titel umbenennen</label>
+        <div class="row">
+          <input id="dl-title" value="${esc(list.title)}" style="flex:1" />
+          <button class="btn btn-primary btn-sm" onclick="patchList('${listId}',{title:document.getElementById('dl-title').value})">Speichern</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Artikel (${list.items.length})</div>
+      ${list.items.length === 0
+        ? '<p class="empty">Keine Artikel in dieser Liste.</p>'
+        : `<table>
+            <thead><tr><th></th><th>Artikel</th><th>Menge</th></tr></thead>
+            <tbody>${list.items.map(item => `
+              <tr class="${item.done ? 'done' : ''}">
+                <td><span class="badge ${item.done ? 'badge-green' : 'badge-yellow'}">${item.done ? '✓' : '○'}</span></td>
+                <td class="${item.done ? 'done' : ''}"><span class="item-name">${esc(item.name)}</span></td>
+                <td><span class="item-qty">${esc(item.quantity)}</span></td>
+              </tr>`).join('')}
+            </tbody>
+           </table>`
+      }
+    </div>
+
+    <div class="card" style="border-color:var(--danger)">
+      <div class="card-title" style="color:var(--danger)">Gefahrenzone</div>
+      <button class="btn btn-danger btn-sm" onclick="deleteList('${listId}')">Liste loeschen</button>
+    </div>
+  `;
+}
+
+async function patchList(listId, data) {
+  await apiFetch(`/api/admin/lists/${listId}`, 'PATCH', data);
+  showToast('Gespeichert', 'ok');
+  renderListDetail(listId);
+}
+
+async function deleteList(listId) {
+  if (!confirm('Liste wirklich loeschen?')) return;
+  await apiFetch(`/api/admin/lists/${listId}`, 'DELETE');
+  showToast('Liste geloescht', 'ok');
+  renderLists();
+}
+
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(() => showToast('Code kopiert', 'ok'));
+}
+
+function copyLink(listId, code) {
+  const link = `ucshoppinglist://join?server=${encodeURIComponent(location.origin)}&code=${code}`;
+  navigator.clipboard.writeText(link).then(() => showToast('Link kopiert', 'ok'));
+}
+
+// ── Access / Onboarding ─────────────────────────────────────────────────────
+async function renderAccess() {
+  const el = document.getElementById('main-content');
+  const [lists, requests] = await Promise.all([
+    apiFetch('/api/admin/lists').catch(() => []),
+    apiFetch('/api/admin/access/requests').catch(() => [])
+  ]);
+
+  const pending = requests.filter(r => r.status === 'pending');
+  el.innerHTML = `
+    <h2>Zugriffsverwaltung</h2>
+
+    <div class="card">
+      <div class="card-title">Einmal-Zugang / QR pro Geraet</div>
+      <div class="field">
+        <label>Liste</label>
+        <select id="ac-list-id">
+          ${lists.map(l => `<option value="${l.id}">${esc(l.title)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Geraetename</label>
+        <input id="ac-device" value="Neues Geraet" />
+      </div>
+      <div class="row end">
+        <button class="btn btn-primary" onclick="generateAccessQr()">QR erstellen</button>
+      </div>
+      <div id="access-qr-result" style="margin-top:14px">${lastQrHtml}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Erstanfragen (${pending.length})</div>
+      ${pending.length === 0 ? '<p class="empty">Keine offenen Anfragen.</p>' : `
+        <table>
+          <thead><tr><th>Code</th><th>Geraet</th><th>Zeit</th><th>Aktion</th></tr></thead>
+          <tbody>
+            ${pending.map(r => `
+              <tr>
+                <td><code>${esc(r.pairCode)}</code></td>
+                <td>${esc(r.deviceName || 'Unbekannt')}</td>
+                <td>${new Date(r.requestedAt).toLocaleString('de-DE')}</td>
+                <td>
+                  <div class="row">
+                    <button class="btn btn-success btn-sm" onclick="approveRequest('${r.id}')">Annehmen</button>
+                    <button class="btn btn-danger btn-sm" onclick="rejectRequest('${r.id}')">Ablehnen</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+  `;
+}
+
+async function generateAccessQr() {
+  const listId = document.getElementById('ac-list-id')?.value || '';
+  const deviceName = document.getElementById('ac-device')?.value?.trim() || 'Neues Geraet';
+  const out = document.getElementById('access-qr-result');
+  const result = await apiFetch('/api/admin/access/create-token', 'POST', { listId, deviceName });
+
+  out.innerHTML = `
+    <div class="row" style="align-items:flex-start">
+      <img src="${result.qrDataUrl}" alt="QR Code" style="width:180px;height:180px;border-radius:8px;background:#fff;padding:8px" />
+      <div style="flex:1;min-width:220px">
+        <div class="field" style="margin-bottom:8px">
+          <label>Deep-Link</label>
+          <input id="qr-link" value="${esc(result.deepLink)}" readonly />
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>Token</label>
+          <input value="${esc(result.accessToken)}" readonly />
+        </div>
+        <div style="font-size:12px;color:var(--muted)">Gueltig bis: ${new Date(result.expiresAt).toLocaleString('de-DE')}</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn btn-ghost btn-sm" onclick="copyPlain('qr-link')">Link kopieren</button>
+        </div>
+      </div>
+    </div>
+  `;
+  lastQrHtml = out.innerHTML;
+
+  showToast('QR fuer ein neues Geraet erzeugt', 'ok');
+}
+
+async function approveRequest(requestId) {
+  const listId = document.getElementById('ac-list-id')?.value || '';
+  const result = await apiFetch('/api/admin/access/approve', 'POST', { requestId, listId });
+  const out = document.getElementById('access-qr-result');
+  out.innerHTML = `
+    <div class="row" style="align-items:flex-start">
+      <img src="${result.qrDataUrl}" alt="QR Code" style="width:180px;height:180px;border-radius:8px;background:#fff;padding:8px" />
+      <div style="flex:1;min-width:220px">
+        <div class="field" style="margin-bottom:8px">
+          <label>Deep-Link</label>
+          <input id="qr-link" value="${esc(result.deepLink)}" readonly />
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label>Token</label>
+          <input value="${esc(result.accessToken)}" readonly />
+        </div>
+        <div style="font-size:12px;color:var(--muted)">Gueltig bis: ${new Date(result.expiresAt).toLocaleString('de-DE')}</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn btn-ghost btn-sm" onclick="copyPlain('qr-link')">Link kopieren</button>
+        </div>
+      </div>
+    </div>
+  `;
+  lastQrHtml = out.innerHTML;
+  showToast('Anfrage angenommen', 'ok');
+}
+
+async function rejectRequest(requestId) {
+  await apiFetch('/api/admin/access/reject', 'POST', { requestId });
+  showToast('Anfrage abgelehnt', 'ok');
+  renderAccess();
+}
+
+function copyPlain(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  navigator.clipboard.writeText(el.value || '').then(() => showToast('Kopiert', 'ok'));
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function renderSettings() {
+  const el = document.getElementById('main-content');
+  const s = await apiFetch('/api/admin/settings').catch(() => ({}));
+  el.innerHTML = `
+    <h2>Einstellungen</h2>
+
+    <div class="card">
+      <div class="card-title">Server</div>
+      <div class="toggle-row">
+        <div>
+          <div style="font-weight:600">Passwortschutz</div>
+          <div class="desc">Web-Interface mit Passwort absichern</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="s-auth" ${s.authEnabled ? 'checked' : ''} />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Neues Passwort (leer lassen = kein Passwort)</label>
+        <input type="password" id="s-pw" placeholder="Neues Passwort" autocomplete="new-password" />
+      </div>
+      <div class="field">
+        <label>Port (Aenderung gilt nach Neustart)</label>
+        <input type="number" id="s-port" value="${s.port || 8080}" min="1" max="65535" />
+      </div>
+      <div class="row end">
+        <button class="btn btn-primary" onclick="saveSettings()">Einstellungen speichern</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Prozess</div>
+      <div class="row">
+        <button class="btn btn-ghost" onclick="doRestart()">🔄 Server neu starten</button>
+        <button class="btn btn-danger" onclick="doShutdown()">⏹ Server herunterfahren</button>
+      </div>
+      <p style="margin-top:10px;font-size:12px;color:var(--muted)">
+        Neustart: Der Server-Prozess beendet sich (systemd / Docker restart-policy startet ihn neu).<br>
+        Herunterfahren: Der Server-Prozess beendet sich endgueltig.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Info</div>
+      <div class="row" style="gap:18px;font-size:13px;color:var(--muted)">
+        <span>Laufzeit: <code id="uptime">…</code></span>
+        <span>Listen: <code id="list-count">…</code></span>
+      </div>
+    </div>
+  `;
+  refreshHealth();
+}
+
+async function saveSettings() {
+  const authEnabled = document.getElementById('s-auth').checked;
+  const port = parseInt(document.getElementById('s-port').value, 10);
+  const newPassword = document.getElementById('s-pw').value;
+  await apiFetch('/api/admin/settings', 'POST', { authEnabled, port, newPassword });
+  showToast('Einstellungen gespeichert', 'ok');
+}
+
+async function doRestart() {
+  if (!confirm('Server neu starten?')) return;
+  await apiFetch('/api/admin/restart', 'POST', {});
+  showToast('Neustart eingeleitet…', 'ok');
+}
+
+async function doShutdown() {
+  if (!confirm('Server herunterfahren?')) return;
+  await apiFetch('/api/admin/shutdown', 'POST', {});
+  showToast('Server wird heruntergefahren.', 'ok');
+}
+
+async function refreshHealth() {
+  const h = await apiFetch('/health').catch(() => null);
+  if (!h) return;
+  const ut = document.getElementById('uptime');
+  const lc = document.getElementById('list-count');
+  if (ut) ut.textContent = fmtUptime(h.uptime);
+  if (lc) lc.textContent = h.lists;
+}
+
+function fmtUptime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function apiFetch(url, method = 'GET', body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const opts = { method, headers };
+  if (body !== null) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(j.error || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+boot();
+</script>
+</body>
+</html>
