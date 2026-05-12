@@ -75,7 +75,7 @@ Bei spaeteren Aenderungen im Projekt:
 
 ```bash
 cd UC-ShoppingList
-sudo ./deploy/update-ubuntu.sh
+sudo ./release/update-ubuntu.sh
 ```
 
 Das Update zieht automatisch die neueste Version vom konfigurierten GitHub-Repo und startet den Dienst neu.
@@ -87,7 +87,7 @@ API-Endpunkte:
 
 WebSocket-Endpunkt:
 
-`ws://<dein-server>:8080/ws?listId=<listId>`
+`ws://<dein-server>:9085/ws?listId=<listId>`
 
 ## 2) Reverse Proxy mit HTTP und HTTPS
 
@@ -110,7 +110,7 @@ Danach laeuft der Node-Server intern und Caddy stellt Ports 80/443 bereit.
 
 Die Server-Verbindung wird direkt in der App im `Verbindungsmenue` gesetzt (Icon mit den verbundenen Lini en).
 
-- Server URL eintragen: z. B. `http://10.0.2.2:8080` (Emulator) oder `http://<LAN-IP-deines-Servers>`
+- Server URL eintragen: z. B. `http://10.0.2.2:9085` (Emulator) oder `http://<LAN-IP-deines-Servers>`
 - Danach `Nur verbinden`, `Neue Liste` oder `Beitreten` waehlen
 
 Dann in Android Studio den Ordner `android-app` oeffnen und starten.
