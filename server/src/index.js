@@ -26,7 +26,7 @@ const server = createServer(handleHttp);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 /**
- * @typedef {{id: string, name: string, quantity: string, done: boolean, updatedAt: number}} ShoppingItem
+ * @typedef {{id: string, name: string, quantity: string, assignedTo: string, status: "open"|"prepared"|"done", done: boolean, checkedBy: string, updatedAt: number}} ShoppingItem
  * @typedef {{id: string, title: string, inviteCode: string, shared: boolean, items: ShoppingItem[]}} ShoppingList
  * @typedef {{lists: Record<string, ShoppingList>, inviteToList: Record<string, string>}} Db
  */
@@ -95,6 +95,8 @@ function handleClientMessage(listId, socket, msg) {
   if (type === "add_item") {
     const name = String(msg?.payload?.name || "").trim();
     const quantity = String(msg?.payload?.quantity || "").trim();
+    const assignedTo = String(msg?.payload?.assignedTo || "").trim();
+    const allowEmptyQuantity = Boolean(msg?.payload?.allowEmptyQuantity);
 
     if (!name) {
       sendError(socket, "invalid_name", "Name darf nicht leer sein.");
@@ -104,8 +106,11 @@ function handleClientMessage(listId, socket, msg) {
     const item = {
       id: createId(10),
       name,
-      quantity: quantity || "1",
+      quantity: allowEmptyQuantity ? quantity : (quantity || "1"),
+      assignedTo,
+      status: "open",
       done: false,
+      checkedBy: "",
       updatedAt: Date.now()
     };
 
@@ -120,7 +125,10 @@ function handleClientMessage(listId, socket, msg) {
 
   if (type === "toggle_item") {
     const id = String(msg?.payload?.id || "");
-    const done = Boolean(msg?.payload?.done);
+    const requestedStatus = normalizeItemStatus(msg?.payload?.status);
+    const doneFromPayload = typeof msg?.payload?.done === "boolean" ? msg.payload.done : null;
+    const done = requestedStatus === "done" || (requestedStatus == null && doneFromPayload === true);
+    const checkedBy = done ? String(msg?.payload?.checkedBy || "").trim() : "";
     const item = list.items.find((x) => x.id === id);
 
     if (!item) {
@@ -128,7 +136,9 @@ function handleClientMessage(listId, socket, msg) {
       return;
     }
 
-    item.done = done;
+    item.status = requestedStatus || (done ? "done" : "open");
+    item.done = item.status === "done";
+    item.checkedBy = checkedBy;
     item.updatedAt = Date.now();
     saveDb();
     broadcast(listId, {
@@ -152,6 +162,38 @@ function handleClientMessage(listId, socket, msg) {
     broadcast(listId, {
       type: "item_removed",
       payload: { id }
+    });
+    return;
+  }
+
+  if (type === "update_item") {
+    const id = String(msg?.payload?.id || "");
+    const name = String(msg?.payload?.name || "").trim();
+    const quantity = String(msg?.payload?.quantity || "").trim();
+    const assignedTo = String(msg?.payload?.assignedTo || "").trim();
+    const status = normalizeItemStatus(msg?.payload?.status) || "open";
+
+    if (!name) {
+      sendError(socket, "invalid_name", "Name darf nicht leer sein.");
+      return;
+    }
+
+    const item = list.items.find((x) => x.id === id);
+    if (!item) {
+      sendError(socket, "not_found", "Artikel nicht gefunden.");
+      return;
+    }
+
+    item.name = name;
+    item.quantity = quantity;
+    item.assignedTo = assignedTo;
+    item.status = status;
+    item.done = status === "done";
+    item.updatedAt = Date.now();
+    saveDb();
+    broadcast(listId, {
+      type: "item_updated",
+      payload: item
     });
     return;
   }
@@ -463,8 +505,15 @@ function handleHttp(req, res) {
     return readJsonBody(req, res, (body) => {
       const item = list.items.find((x) => x.id === itemId);
       if (!item) return sendJson(res, 404, { error: "Artikel nicht gefunden" });
+      const requestedStatus = normalizeItemStatus(body?.status);
       if (typeof body?.done === "boolean") {
         item.done = body.done;
+        item.status = body.done ? "done" : "open";
+        item.updatedAt = Date.now();
+      }
+      if (requestedStatus) {
+        item.status = requestedStatus;
+        item.done = requestedStatus === "done";
         item.updatedAt = Date.now();
       }
       saveDb();
@@ -535,6 +584,14 @@ function createList(title, shared = true) {
   return list;
 }
 
+function normalizeItemStatus(rawStatus) {
+  const normalized = String(rawStatus || "").trim().toLowerCase();
+  if (normalized === "open" || normalized === "prepared" || normalized === "done") {
+    return normalized;
+  }
+  return null;
+}
+
 function loadDb() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -550,9 +607,18 @@ function loadDb() {
     const parsed = JSON.parse(raw);
 
     if (parsed && parsed.lists && parsed.inviteToList) {
-      // ensure shared flag exists on old lists
+      // ensure new fields exist on old data
       for (const list of Object.values(parsed.lists)) {
         if (typeof list.shared !== "boolean") list.shared = true;
+        if (!Array.isArray(list.items)) list.items = [];
+        for (const item of list.items) {
+          item.quantity = typeof item.quantity === "string" ? item.quantity : "1";
+          item.assignedTo = typeof item.assignedTo === "string" ? item.assignedTo : "";
+          item.checkedBy = typeof item.checkedBy === "string" ? item.checkedBy : "";
+          const status = normalizeItemStatus(item.status);
+          item.status = status || (item.done ? "done" : "open");
+          item.done = item.status === "done";
+        }
       }
       return parsed;
     }

@@ -1,17 +1,32 @@
 package com.ucshoppinglist.data
 
+enum class ListType {
+    SHOPPING, PLANNUNG, COOKING, NOTE;
+
+    fun displayName(): String = when (this) {
+        SHOPPING -> "Einkaufsliste"
+        PLANNUNG -> "Plannung"
+        COOKING -> "Kochideen"
+        NOTE -> "Notiz"
+    }
+}
+
 data class ShoppingItem(
     val id: String,
     val name: String,
     val quantity: String,
-    val done: Boolean
+    val status: String = "open",
+    val assignedTo: String = "",
+    val done: Boolean,
+    val checkedBy: String = ""
 )
 
 data class ListAccess(
     val listId: String,
     val inviteCode: String,
     val title: String,
-    val shared: Boolean = true
+    val shared: Boolean = true,
+    val listType: ListType = ListType.SHOPPING
 )
 
 data class AccessRequestStatus(
@@ -26,7 +41,10 @@ data class PendingAction(
     val id: String = "",
     val name: String = "",
     val quantity: String = "",
-    val done: Boolean = false
+    val status: String = "open",
+    val assignedTo: String = "",
+    val done: Boolean = false,
+    val checkedBy: String = ""
 )
 
 sealed interface ServerEvent {

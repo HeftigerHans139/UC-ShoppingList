@@ -20,21 +20,49 @@ class RealtimeClient {
     private var socket: WebSocket? = null
     private var currentListId: String? = null
     private var isConnected: Boolean = false
+    private var connectionId: Int = 0  // wird bei jeder neuen Verbindung erhöht
 
     private val _events = MutableSharedFlow<ServerEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<ServerEvent> = _events
 
     fun connect(listId: String) {
-        if (socket != null && currentListId == listId) return
+        if (socket != null && currentListId == listId && isConnected) return
 
         disconnect()
         currentListId = listId
+        connectionId++
+        val myConnectionId = connectionId
 
         val request = Request.Builder()
             .url("$wsBaseUrl?listId=$listId")
             .build()
 
-        socket = client.newWebSocket(request, listener)
+        socket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (connectionId != myConnectionId) return
+                isConnected = true
+                _events.tryEmit(ServerEvent.Connection(true, "Live verbunden"))
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                if (connectionId != myConnectionId) return
+                parseAndEmit(text)
+            }
+
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (connectionId != myConnectionId) return
+                isConnected = false
+                _events.tryEmit(ServerEvent.Connection(false, "Offline - warte auf Verbindung"))
+                socket = null
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (connectionId != myConnectionId) return
+                isConnected = false
+                _events.tryEmit(ServerEvent.Connection(false, "Offline"))
+                socket = null
+            }
+        })
     }
 
     fun updateServerBase(httpBaseUrl: String) {
@@ -63,17 +91,28 @@ class RealtimeClient {
 
     fun connected(): Boolean = isConnected
 
-    fun addItem(name: String, quantity: String) {
+    fun addItem(name: String, quantity: String, assignedTo: String = "", allowEmptyQuantity: Boolean = false) {
         val msg = JSONObject()
             .put("type", "add_item")
-            .put("payload", JSONObject().put("name", name).put("quantity", quantity))
+            .put("payload", JSONObject()
+                .put("name", name)
+                .put("quantity", quantity)
+                .put("assignedTo", assignedTo)
+                .put("allowEmptyQuantity", allowEmptyQuantity))
         socket?.send(msg.toString())
     }
 
-    fun toggleItem(id: String, done: Boolean) {
+    fun toggleItem(id: String, done: Boolean, checkedBy: String = "") {
         val msg = JSONObject()
             .put("type", "toggle_item")
-            .put("payload", JSONObject().put("id", id).put("done", done))
+            .put("payload", JSONObject().put("id", id).put("done", done).put("checkedBy", checkedBy))
+        socket?.send(msg.toString())
+    }
+
+    fun setItemStatus(id: String, status: String, checkedBy: String = "") {
+        val msg = JSONObject()
+            .put("type", "toggle_item")
+            .put("payload", JSONObject().put("id", id).put("status", status).put("checkedBy", checkedBy))
         socket?.send(msg.toString())
     }
 
@@ -84,29 +123,16 @@ class RealtimeClient {
         socket?.send(msg.toString())
     }
 
-    private val listener = object : WebSocketListener() {
-        override fun onOpen(webSocket: WebSocket, response: Response) {
-            isConnected = true
-            _events.tryEmit(ServerEvent.Connection(true, "Live verbunden"))
-        }
-
-        override fun onMessage(webSocket: WebSocket, text: String) {
-            parseAndEmit(text)
-        }
-
-        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            isConnected = false
-            _events.tryEmit(ServerEvent.Connection(false, "Offline - warte auf Verbindung"))
-            _events.tryEmit(ServerEvent.Error("Verbindung fehlgeschlagen: ${t.message}"))
-            socket = null
-        }
-
-        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            isConnected = false
-            _events.tryEmit(ServerEvent.Connection(false, "Offline"))
-            _events.tryEmit(ServerEvent.Error("Verbindung beendet: $reason"))
-            socket = null
-        }
+    fun updateItem(id: String, name: String, quantity: String, assignedTo: String, status: String) {
+        val msg = JSONObject()
+            .put("type", "update_item")
+            .put("payload", JSONObject()
+                .put("id", id)
+                .put("name", name)
+                .put("quantity", quantity)
+                .put("assignedTo", assignedTo)
+                .put("status", status))
+        socket?.send(msg.toString())
     }
 
     private fun parseAndEmit(text: String) {
@@ -146,11 +172,17 @@ class RealtimeClient {
     }
 
     private fun JSONObject.toShoppingItem(): ShoppingItem {
+        val status = optString("status").ifBlank {
+            if (optBoolean("done", false)) "done" else "open"
+        }
         return ShoppingItem(
             id = optString("id"),
             name = optString("name"),
             quantity = optString("quantity", "1"),
-            done = optBoolean("done", false)
+            status = status,
+            assignedTo = optString("assignedTo", ""),
+            done = status == "done" || optBoolean("done", false),
+            checkedBy = optString("checkedBy", "")
         )
     }
 }

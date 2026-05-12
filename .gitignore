@@ -1,0 +1,19 @@
+# Gradle Wrapper
+/gradlew
+/gradlew.bat
+
+# Vorlage
+/audio-share-main
+
+# Android build
+/android-app/app/build/
+
+# Lokale Properties
+/android-app/local.properties
+
+# PNG-Launcher-Icons NICHT ins Repo
+/android-app/app/src/main/res/mipmap-hdpi/ic_launcher.png
+/android-app/app/src/main/res/mipmap-mdpi/ic_launcher.png
+/android-app/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+/android-app/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+/android-app/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png

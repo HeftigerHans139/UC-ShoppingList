@@ -1,11 +1,20 @@
 package com.ucshoppinglist.ui
 
+import android.Manifest
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ucshoppinglist.R
 import com.ucshoppinglist.data.ListAccess
 import com.ucshoppinglist.data.ListApi
+import com.ucshoppinglist.data.ListType
 import com.ucshoppinglist.data.PendingAction
 import com.ucshoppinglist.data.RealtimeClient
 import com.ucshoppinglist.data.ServerEvent
@@ -27,12 +36,15 @@ data class ShoppingUiState(
     val currentListId: String = "",
     val inviteCode: String = "",
     val listTitle: String = "Gemeinsame Einkaufsliste",
+    val currentListType: ListType = ListType.SHOPPING,
     val serverHttpBase: String = "http://10.0.2.2:8080",
     val pendingCount: Int = 0,
     val showOnboarding: Boolean = true,
     val errorMessage: String = "",
     val savedLists: List<ListAccess> = emptyList(),
-    val pendingPairCode: String = ""
+    val pendingPairCode: String = "",
+    val userName: String = "",
+    val notificationSettings: Map<String, Boolean> = emptyMap()
 )
 
 class ShoppingViewModel(application: Application) : AndroidViewModel(application) {
@@ -55,8 +67,19 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         listApi.updateBaseUrl(serverBase)
         realtimeClient.updateServerBase(serverBase)
 
-        _uiState.update { it.copy(serverHttpBase = serverBase, savedLists = loadSavedLists()) }
+        val savedLists = loadSavedLists()
+        val userName = prefs.getString("userName", "").orEmpty()
+        val notificationSettings = loadNotificationSettings()
+        _uiState.update {
+            it.copy(
+                serverHttpBase = serverBase,
+                savedLists = savedLists,
+                userName = userName,
+                notificationSettings = notificationSettings
+            )
+        }
 
+        createNotificationChannel()
         observeEvents()
         maybeConnectStoredList()
         startReconnectLoopIfNeeded()
@@ -81,15 +104,34 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun addItem(name: String, quantity: String) {
+    fun saveUserName(name: String) {
+        prefs.edit().putString("userName", name.trim()).apply()
+        _uiState.update { it.copy(userName = name.trim()) }
+    }
+
+    fun setNotificationEnabled(listId: String, enabled: Boolean) {
+        val updated = _uiState.value.notificationSettings.toMutableMap()
+        updated[listId] = enabled
+        persistNotificationSettings(updated)
+        _uiState.update { it.copy(notificationSettings = updated) }
+    }
+
+    fun addItem(name: String, quantity: String, assignedTo: String = "", allowEmptyQuantity: Boolean = false) {
         val n = name.trim()
-        val q = quantity.trim().ifBlank { "1" }
-        val action = PendingAction(type = "add", name = n, quantity = q)
+        val q = if (allowEmptyQuantity) quantity.trim() else quantity.trim().ifBlank { "1" }
+        val action = PendingAction(type = "add", name = n, quantity = q, assignedTo = assignedTo.trim())
         sendOrQueue(action)
     }
 
     fun toggleDone(item: ShoppingItem, done: Boolean) {
-        val action = PendingAction(type = "toggle", id = item.id, done = done)
+        val checkedBy = if (done) _uiState.value.userName.ifBlank { "Jemand" } else ""
+        val action = PendingAction(type = "toggle", id = item.id, done = done, checkedBy = checkedBy)
+        sendOrQueue(action)
+    }
+
+    fun setItemStatus(item: ShoppingItem, status: String) {
+        val checkedBy = if (status == "done") _uiState.value.userName.ifBlank { "Jemand" } else ""
+        val action = PendingAction(type = "set_status", id = item.id, status = status, checkedBy = checkedBy)
         sendOrQueue(action)
     }
 
@@ -98,14 +140,27 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         sendOrQueue(action)
     }
 
-    fun createNewList(title: String = "Gemeinsame Einkaufsliste", shared: Boolean = true) {
+    fun updateItem(item: ShoppingItem) {
+        val action = PendingAction(
+            type = "update",
+            id = item.id,
+            name = item.name,
+            quantity = item.quantity,
+            assignedTo = item.assignedTo,
+            status = item.status.ifBlank { if (item.done) "done" else "open" }
+        )
+        sendOrQueue(action)
+    }
+
+    fun createNewList(title: String = "Gemeinsame Einkaufsliste", listType: ListType = ListType.SHOPPING, shared: Boolean = true) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 listApi.createList(title, shared)
             }.onSuccess { access ->
-                saveAccess(access)
-                addToSavedLists(access)
-                connectToList(access)
+                val typed = access.copy(listType = listType)
+                saveAccess(typed)
+                addToSavedLists(typed)
+                connectToList(typed)
             }.onFailure { err ->
                 _uiState.update { it.copy(errorMessage = err.message ?: "Erstellen fehlgeschlagen") }
             }
@@ -258,6 +313,10 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     }
                     is ServerEvent.ItemAdded -> {
                         _uiState.update { it.copy(items = it.items + event.item) }
+                        val listId = _uiState.value.currentListId
+                        if (_uiState.value.notificationSettings[listId] == true) {
+                            showItemNotification(event.item)
+                        }
                     }
                     is ServerEvent.ItemUpdated -> {
                         _uiState.update {
@@ -284,11 +343,13 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     private fun maybeConnectStoredList() {
         val listId = prefs.getString("listId", "").orEmpty()
         if (listId.isNotBlank()) {
+            val savedList = _uiState.value.savedLists.find { it.listId == listId }
             _uiState.update {
                 it.copy(
                     currentListId = listId,
                     inviteCode = prefs.getString("inviteCode", "").orEmpty(),
                     listTitle = prefs.getString("listTitle", "Gemeinsame Einkaufsliste").orEmpty(),
+                    currentListType = savedList?.listType ?: ListType.SHOPPING,
                     showOnboarding = false,
                     connectionMessage = "Verbinde..."
                 )
@@ -303,6 +364,7 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                 currentListId = access.listId,
                 inviteCode = access.inviteCode,
                 listTitle = access.title,
+                currentListType = access.listType,
                 showOnboarding = false,
                 connectionMessage = "Verbinde...",
                 errorMessage = ""
@@ -328,9 +390,11 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
 
     private fun dispatch(action: PendingAction) {
         when (action.type) {
-            "add" -> realtimeClient.addItem(action.name, action.quantity)
-            "toggle" -> realtimeClient.toggleItem(action.id, action.done)
+            "add" -> realtimeClient.addItem(action.name, action.quantity, action.assignedTo, action.quantity.isBlank())
+            "toggle" -> realtimeClient.toggleItem(action.id, action.done, action.checkedBy)
+            "set_status" -> realtimeClient.setItemStatus(action.id, action.status, action.checkedBy)
             "remove" -> realtimeClient.removeItem(action.id)
+            "update" -> realtimeClient.updateItem(action.id, action.name, action.quantity, action.assignedTo, action.status)
         }
     }
 
@@ -357,7 +421,10 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     id = o.optString("id"),
                     name = o.optString("name"),
                     quantity = o.optString("quantity"),
-                    done = o.optBoolean("done", false)
+                    status = o.optString("status", "open"),
+                    assignedTo = o.optString("assignedTo"),
+                    done = o.optBoolean("done", false),
+                    checkedBy = o.optString("checkedBy")
                 )
             }
         } catch (_: Exception) {
@@ -375,7 +442,10 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     .put("id", a.id)
                     .put("name", a.name)
                     .put("quantity", a.quantity)
+                    .put("status", a.status)
+                    .put("assignedTo", a.assignedTo)
                     .put("done", a.done)
+                    .put("checkedBy", a.checkedBy)
             )
         }
         prefs.edit().putString("pendingActions", arr.toString()).apply()
@@ -402,11 +472,14 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
             val arr = JSONArray(raw)
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
+                val typeName = o.optString("listType", ListType.SHOPPING.name)
+                val listType = runCatching { ListType.valueOf(typeName) }.getOrDefault(ListType.SHOPPING)
                 ListAccess(
                     listId = o.optString("listId"),
                     inviteCode = o.optString("inviteCode"),
                     title = o.optString("title", "Einkaufsliste"),
-                    shared = o.optBoolean("shared", true)
+                    shared = o.optBoolean("shared", true),
+                    listType = listType
                 )
             }
         } catch (_: Exception) { emptyList() }
@@ -419,9 +492,54 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                 .put("listId", l.listId)
                 .put("inviteCode", l.inviteCode)
                 .put("title", l.title)
-                .put("shared", l.shared))
+                .put("shared", l.shared)
+                .put("listType", l.listType.name))
         }
         prefs.edit().putString("savedLists", arr.toString()).apply()
+    }
+
+    private fun loadNotificationSettings(): Map<String, Boolean> {
+        val raw = prefs.getString("notificationSettings", "{}").orEmpty()
+        return try {
+            val obj = JSONObject(raw)
+            obj.keys().asSequence().associateWith { obj.getBoolean(it) }
+        } catch (_: Exception) { emptyMap() }
+    }
+
+    private fun persistNotificationSettings(settings: Map<String, Boolean>) {
+        val obj = JSONObject()
+        settings.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit().putString("notificationSettings", obj.toString()).apply()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "Listenaenderungen",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Benachrichtigung wenn Artikel zur Liste hinzugefuegt werden"
+            }
+            val nm = getApplication<Application>().getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+        }
+    }
+
+    private fun showItemNotification(item: ShoppingItem) {
+        val context = getApplication<Application>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        }
+        val listTitle = _uiState.value.listTitle
+        val notification = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(listTitle)
+            .setContentText("${item.name} wurde hinzugefuegt")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(item.id.hashCode(), notification)
     }
 
     private fun normalizeServerBase(input: String): String {
@@ -450,5 +568,9 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         realtimeClient.disconnect()
         super.onCleared()
+    }
+
+    companion object {
+        private const val NOTIFICATION_CHANNEL_ID = "shopping_list_items"
     }
 }
